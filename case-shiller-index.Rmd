@@ -1,0 +1,194 @@
+---
+title: "case shiller test"
+output: html_document
+date: "2024-09-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+
+# Import Libraries
+require(forecast)
+require(tseries)
+require(tidyverse)
+```
+
+```{r}
+# set wd
+setwd("C:/Users/Subham Karande/Degree/Final Year/Seventh Semester/Big Data Analytics/Project")
+```
+
+```{r}
+# Import Data
+CaseShiller <- read.csv("SPCS20RPSNSA.csv")
+
+# Check data import
+head(CaseShiller)
+```
+
+```{r}
+# Change name of data column to Units
+names(CaseShiller) [2] <- "Units" 
+
+# Creates a Units Object as intermediate to transform into time series
+CSUnits <- CaseShiller$Units 
+
+# Creates Time Series Object that starts in January 2000 with a monthly frequency
+tCaseShiller <- ts(CSUnits, start = c(2000, 1), frequency = 12) 
+
+# Check Data Transformation
+tCaseShiller
+```
+
+```{r}
+# Automatically create ARIMA Model
+fit <- auto.arima(tCaseShiller)
+fit
+```
+
+```{r}
+# Check Accuracy
+accuracy(fit)
+```
+
+```{r}
+# Create a simple plot with a forecast for the next year
+plot(forecast(fit, 12), xlab = "Date", ylab = "Units", main = "ARIMA Forecast for Case-Shiller Index")
+```
+
+```{r}
+# Get table of forecasted values. Check back next year to see whether this was close!
+pred_values <- forecast(fit,12)
+pred_values
+```
+
+```{r}
+# Check assumptions of normality & Autocorrelation
+qqnorm(fit$residuals)
+qqline(fit$residuals)
+Box.test(fit$residuals, type = "Ljung-Box")
+
+# Has high p-value, so autocorrelation not significantly different than 0
+# There are a few possible outliers, but most of the data is pretty normally distributed
+```
+
+```{r}
+# Transform time series to log scale
+ltCaseShiller <- log(tCaseShiller)
+
+# Check it worked
+head(ltCaseShiller)
+```
+
+```{r}
+# Create new fit on log scale series for seasonal decomposition
+fit2 <- stl(ltCaseShiller, s.window = "period") 
+
+# Plot Seasonal Decomposition
+plot(fit2, main = "Seasonal Decomposition of log(Case-Shiller Units)")
+```
+
+```{r}
+# Create a Season Plot
+ggseasonplot(tCaseShiller, year.labels = TRUE, col = rainbow(20))
+```
+
+```{r}
+# Automatically create ARIMA Model
+fit3 <- auto.arima(ltCaseShiller)
+fit3
+```
+
+```{r}
+# Check Accuracy
+fitAccuracy <- data.frame(accuracy(fit))
+fitAccuracy2 <- data.frame(accuracy(fit3))
+
+fitAccuracyFinal <- rbind(fitAccuracy, fitAccuracy2)
+fitAccuracyFinal
+```
+
+```{r}
+# Create a simple plot with a logged forecast for the next year
+plot(forecast(fit3, 12), xlab = "Date", ylab = "Units", main =  "ARIMA Forecast for Case-Shiller Index")
+```
+
+```{r}
+# Get table of forecasted values. Check back next year to see whether this was close!
+# Original Data
+pred_values <- data.frame(forecast(fit, 12)) 
+
+# Log transformed data
+pred_values2 <- data.frame(forecast(fit3, 12))
+pred_values2[,1:5] <- exp(pred_values2[,1:5]) 
+
+# Merge forecast predictions!
+mergeDF <- data.frame(Date = rownames(pred_values), 
+                      Original_Data_Forecast = pred_values$Point.Forecast,  
+                      Log_Transformed_Data_Forecast = pred_values2$Point.Forecast, 
+                      Difference = round(pred_values$Point.Forecast - pred_values2$Point.Forecast, 2))
+mergeDF
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+# Read the data (assuming your CSV file is in the working directory)
+df <- read.csv("SPCS20RPSNSA.csv")
+
+# Convert DATE to Date format
+df$DATE <- as.Date(df$DATE)
+
+# Generate the histogram
+ggplot(df, aes(x = SPCS20RPSNSA)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Histogram of SPCS20RPSNSA (Housing Index Values)", 
+       x = "Housing Index Values", 
+       y = "Frequency") +
+  theme_minimal()
+```
+
+```{r}
+# Create quantiles based on SPCS20RPSNSA
+df$Quantiles <- cut(df$SPCS20RPSNSA, 
+                    breaks = quantile(df$SPCS20RPSNSA, probs = seq(0, 1, by = 0.25), na.rm = TRUE), 
+                    include.lowest = TRUE, labels = c("Low", "Medium-Low", "Medium-High", "High"))
+
+# Count occurrences in each quantile
+quantile_counts <- table(df$Quantiles)
+
+# Generate the pie chart
+pie(quantile_counts, 
+    labels = paste(names(quantile_counts), round(100 * prop.table(quantile_counts), 1), "%"), 
+    col = c("skyblue", "lightgreen", "orange", "pink"), 
+    main = "Pie Chart of Housing Index Values by Quantiles")
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+
+# Extract Year from DATE
+df$Year <- format(as.Date(df$DATE), "%Y")
+
+# Calculate the average housing index per year
+yearly_avg <- aggregate(SPCS20RPSNSA ~ Year, data = df, FUN = mean)
+
+# Reshape the data for heatmap
+heatmap_data <- melt(yearly_avg, id.vars = "Year")
+
+# Generate the heatmap
+ggplot(heatmap_data, aes(x = Year, y = variable, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "lightblue", high = "red") +
+  labs(title = "Heatmap of Average Housing Index Values by Year", 
+       x = "Year", y = "Housing Index") +
+  theme_minimal()
+```
+
